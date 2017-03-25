@@ -1,0 +1,17 @@
+# depslib dependency file v1.0
+1490456330 source:/home/thanh/fall/fall/main.cpp
+	"opencv2/highgui/highgui.hpp"
+	"opencv2/opencv.hpp"
+	<time.h>
+	<math.h>
+	<ctype.h>
+	<iostream>
+	<stdio.h>
+	<stdlib.h>
+
+1490323905 source:/home/thanh/fall/fall/foreground_extractor.cpp
+	"opencv2/opencv.hpp"
+
+1490323594 source:/home/thanh/fall/fall/input.cpp
+	"opencv2/opencv.hpp"
+
