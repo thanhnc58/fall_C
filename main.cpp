@@ -23,7 +23,7 @@ const double MHI_THRESHOLD = 100;
 deque<Point2i> mcqueue;
 Mat mhi; // MHI
 int prev_area;
-bool DRAW = true;
+bool DRAW = false;
 mutex m;
 
 void read_next_frame(VideoCapture cap, Mat& frame, int& index){
@@ -139,6 +139,22 @@ void  update_mhi( const Mat& img, Mat& mhi_out, int diff_threshold,
     mhi_out = Mat::zeros(mask.size(), CV_8U);
     insertChannel(mask, mhi_out, 0);
 
+
+}
+
+void mhi_coefficient(const Mat& img, Mat& mhi_out, int diff_threshold,
+                 double& magnitude, double& mass_speed, double& angle, double& motion_ratio){
+    double timestamp = (double)clock() /CLOCKS_PER_SEC; // get current time in seconds
+    int centroid_x , cur_centroid_x , centroid_y , cur_centroid_y, cur_m, all_m, pass_m;
+    int foreground_h, foreground_w, mhi_h, mhi_w, foreground_area;
+    bool noise;
+    vector<vector<Point> > contours , cur_contour;
+    vector<Vec4i> hierarchy;
+    vector<Point> max_contour;
+    vector<Moments> m;
+    Point2i prev_mc;
+    Mat silh, orient, mask, segmask , mhi_out_2 , recent_motion;
+
     if(DRAW){
         motempl::calcMotionGradient( mhi, mask, orient, MAX_TIME_DELTA, MIN_TIME_DELTA, 3 );
         vector<Rect> brects;
@@ -232,6 +248,7 @@ void  update_mhi( const Mat& img, Mat& mhi_out, int diff_threshold,
     else{
         motion_ratio = 0;
     }
+
 }
 
 void shape_feature(Mat frame, RotatedRect min_elip, float& elip_angle, float& elip_ratio){
@@ -276,6 +293,7 @@ void run_get_feature(VideoCapture cap, Mat& frame, int& frame_index,
     m.lock();
     update_mhi( max_contour, motion, 30 , magnitude, mass_speed, angle, motion_ratio);
     m.unlock();
+    mhi_coefficient(max_contour, motion, 30 , magnitude, mass_speed, angle, motion_ratio);
 
     // calculate coefficient depend on elip shape
     shape_feature(frame, min_elip, elip_angle, elip_ratio);
