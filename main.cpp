@@ -9,6 +9,8 @@
 #include <stdlib.h>
 #include <queue>
 #include <math.h>
+#include <thread>
+#include <mutex>
 
 using namespace cv;
 using namespace std;
@@ -22,6 +24,7 @@ deque<Point2i> mcqueue;
 Mat mhi; // MHI
 int prev_area;
 bool DRAW = true;
+mutex m;
 
 void read_next_frame(VideoCapture cap, Mat& frame, int& index){
 
@@ -204,7 +207,7 @@ void  update_mhi( const Mat& img, Mat& mhi_out, int diff_threshold,
         dx = cur_centroid_x - centroid_x;
         dy = cur_centroid_y - centroid_y;
         magnitude = sqrt(dx * dx + dy * dy);
-        cout << "magnitude  " << magnitude << "  //";
+        //cout << "magnitude  " << magnitude << "  //";
 
         //calculate angle
         if (dx != 0 ){
@@ -214,7 +217,7 @@ void  update_mhi( const Mat& img, Mat& mhi_out, int diff_threshold,
             if (dx < 0 && dy < 0) angle = angle + M_PI;
             if (dx < 0 && dy > 0) angle = M_PI - angle;
             angle *= 180/M_PI;
-            cout << "  " <<angle << "  angle  ";
+            //cout << "  " <<angle << "  angle  ";
         }
 
     }
@@ -237,7 +240,7 @@ void shape_feature(Mat frame, RotatedRect min_elip, float& elip_angle, float& el
         elip_ratio = min_elip.size.width / min_elip.size.height;
         Scalar color( 255,255,0);
         ellipse(frame,min_elip,color,1,8);
-        cout << " angle " << elip_angle << "  ratio " << elip_ratio << "  //";
+        //cout << " angle " << elip_angle << "  ratio " << elip_ratio << "  //";
 
     }
     catch (exception& e){
@@ -245,6 +248,50 @@ void shape_feature(Mat frame, RotatedRect min_elip, float& elip_angle, float& el
     }
 }
 
+void run_get_feature(VideoCapture cap, Mat& frame, int& frame_index,
+                     Ptr<BackgroundSubtractor> pMOG2, Mat& foreground,
+                     vector<vector<Point> > contours, vector<Vec4i> hierarchy,
+                      Mat& motion, int& contour_area,
+                 double& magnitude, double& mass_speed, double& angle, double& motion_ratio,
+                 RotatedRect& min_elip, float& elip_angle, float& elip_ratio){
+
+
+    // read frame
+    m.lock();
+    read_next_frame(cap,frame, frame_index);
+    m.unlock();
+
+    // foreground subtract
+    MOG2(pMOG2,frame,frame_index,foreground);
+
+    // find contour
+    findContours( foreground, contours, hierarchy, 1, 2);
+
+    // draw contour
+
+    Mat max_contour(foreground.rows,foreground.cols,CV_8UC1,Scalar::all(0));
+    Draw_max_contour(foreground,contours,max_contour,contour_area,min_elip);
+
+    // calculate coefficient depend on mhi
+    m.lock();
+    update_mhi( max_contour, motion, 30 , magnitude, mass_speed, angle, motion_ratio);
+    m.unlock();
+
+    // calculate coefficient depend on elip shape
+    shape_feature(frame, min_elip, elip_angle, elip_ratio);
+
+
+    m.lock();
+        imshow( "Motion", motion );
+        imshow("foreground", foreground);
+        imshow("asdffasdafsd", frame);
+        cout << frame_index << "  magnitude " <<magnitude << " mass_speed "<< mass_speed
+        << " angle " << angle << " motion_ratio "<< motion_ratio
+        <<" elip_angle "<< elip_angle <<" elip_ratio "<< elip_ratio << endl;
+    m.unlock();
+
+
+}
 
 int main(int argc, char* argv[])
 {
@@ -273,36 +320,37 @@ int main(int argc, char* argv[])
 
         double t = (double) getTickCount();
 
-        // read frame
-        read_next_frame(cap,frame, frame_index);
+        thread t1(run_get_feature,cap, ref(frame), ref(frame_index), pMOG2, ref(foreground),
+                        contours, hierarchy, ref(motion), ref(contour_area),
+                        ref(magnitude), ref(mass_speed), ref(angle),
+                  ref(motion_ratio), ref(min_elip), ref(elip_angle), ref(elip_ratio));
 
-        // foreground subtract
-        MOG2(pMOG2,frame,frame_index,foreground);
+        thread t2(run_get_feature,cap, ref(frame), ref(frame_index), pMOG2, ref(foreground),
+                        contours, hierarchy, ref(motion), ref(contour_area),
+                        ref(magnitude), ref(mass_speed), ref(angle),
+                  ref(motion_ratio), ref(min_elip), ref(elip_angle), ref(elip_ratio));
 
-        // find contour
-        findContours( foreground, contours, hierarchy, 1, 2);
-
-        // draw contour
-        Mat max_contour(foreground.rows,foreground.cols,CV_8UC1,Scalar::all(0));
-        Draw_max_contour(foreground,contours,max_contour,contour_area,min_elip);
-
-        // calculate coefficient depend on mhi
-        update_mhi( max_contour, motion, 30 , magnitude, mass_speed, angle, motion_ratio);
-
-        // calculate coefficient depend on elip shape
-        shape_feature(frame, min_elip, elip_angle, elip_ratio);
-
+        thread t3(run_get_feature,cap, ref(frame), ref(frame_index), pMOG2, ref(foreground),
+                        contours, hierarchy, ref(motion), ref(contour_area),
+                        ref(magnitude), ref(mass_speed), ref(angle),
+                  ref(motion_ratio), ref(min_elip), ref(elip_angle), ref(elip_ratio));
+        thread t4(run_get_feature,cap, ref(frame), ref(frame_index), pMOG2, ref(foreground),
+                        contours, hierarchy, ref(motion), ref(contour_area),
+                        ref(magnitude), ref(mass_speed), ref(angle),
+                  ref(motion_ratio), ref(min_elip), ref(elip_angle), ref(elip_ratio));
+        if (t1.joinable()) t1.join();
+        if (t2.joinable()) t2.join();
+        if (t3.joinable()) t3.join();
+        if (t4.joinable()) t4.join();
 
         /* elip angle sao lai tinh tu mhi, tinh motion ratio*/
-        imshow( "Motion", motion );
-        imshow("foreground", foreground);
-        imshow("asdffasdafsd", frame);
+
 
 
 
         t = ((double)getTickCount() - t)/getTickFrequency();
         t = (1/t) * 4;
-        cout << frame_index<< endl;
+        cout << " fps " << t << endl;
 
         if(waitKey(30) == 27){
             cout << "esc key is pressed by user" << endl;
