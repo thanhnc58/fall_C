@@ -39,7 +39,6 @@
 		</Linker>
 		<Unit filename="Fall.mp4" />
 		<Unit filename="Fall07.mp4" />
-		<Unit filename="foreground_extractor.cpp" />
 		<Unit filename="lena.jpg" />
 		<Unit filename="main.cpp" />
 		<Extensions>
