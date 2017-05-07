@@ -16,17 +16,18 @@
 using namespace cv;
 using namespace std;
 
-const double MHI_DURATION = 30;
+const double MHI_DURATION = 40;
 const double MAX_TIME_DELTA = 0.5;
 const double MIN_TIME_DELTA = 0.05;
 const double MHI_THRESHOLD = 100;
-const double CONST_MC_SPEED_1 = 30;
-const double CONST_MRATE_1 = 50;
-const double CONST_MAGN_1 = 30;
+const double CONST_MC_SPEED_1 = 22;
+const double CONST_MRATE_1 = 40;
+const double CONST_MAGN_1 = 13;
+const double MASS_EXTREAM_CONT = 50;
 
-const double CONST_MC_SPEED_2 = 79;
-const double CONST_MRATE_2 = 50;
-const double CONST_MAGN_2 = 20;
+const double CONST_MC_SPEED_2 = 20;
+const double CONST_MRATE_2 = 40;
+const double CONST_MAGN_2 = 10;
 
 const double CONST_AR = 0.4;
 const double CONST_ANGLE = 0;
@@ -37,20 +38,23 @@ const double MAX_CONT_AREA = 150 * 150;
 deque<Point2i> mcqueue;
 Mat mhi; // MHI
 int prev_area , large_motion_frame , move_down_frame , apparently_fall_frame;
-bool DRAW = false;
+bool DRAW = true;
 mutex m;
 int mhi_timestamp = 0;
+int falllll = 0;
 
-void read_next_frame(VideoCapture cap, Mat& frame, int& index){
+
+int read_next_frame(VideoCapture cap, Mat& frame, int& index){
 
 
 
     bool bSuccess = cap.read(frame);
     if (!bSuccess){
         cout << "Cannot read the frame from video fileeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee" << endl;
-        return;
+        return 0;
     }
     index++;
+    return 1;
 
     //resize frame
     //resize(frame, frame, Size(320,240), 0, 0, INTER_LINEAR);
@@ -104,10 +108,13 @@ void Draw_max_contour(Mat foreground, vector<vector<Point> > contours,
             drawContours( max_contour, contours,largest_contour_index, color, CV_FILLED);
         }
     }
+    else{
+        contour_area = 0;
+    }
 }
 
 void  update_mhi( const Mat& img, Mat& mhi_out, int diff_threshold){
-    mhi_timestamp = mhi_timestamp + 2;
+    mhi_timestamp = mhi_timestamp + 1;
     double timestamp = mhi_timestamp; // get current time in seconds
     //cout <<"timestaep: "<< timestamp << endl;
     int foreground_h, foreground_w, mhi_h, mhi_w, foreground_area;
@@ -129,11 +136,19 @@ void  update_mhi( const Mat& img, Mat& mhi_out, int diff_threshold){
         mhi = Mat::zeros(img.size(), CV_32F);
     }
 
+
+
+
+    threshold( img, silh, diff_threshold, 1, CV_THRESH_BINARY ); // and threshold it
+
     // set mhi
-    if( mhi.empty() ) mhi = Mat::zeros(silh.size(), CV_32F);
+    if( mhi.empty() ){
+        mhi = Mat::zeros(img.size(), CV_32F);
+        //cout << "asdffasd" ;
+
+    }
 
     // update MHI
-    threshold( img, silh, diff_threshold, 1, CV_THRESH_BINARY ); // and threshold it
     motempl::updateMotionHistory( silh, mhi, timestamp, MHI_DURATION );
     mhi.convertTo(mhi_out, CV_8U, 255./MHI_DURATION, (MHI_DURATION - timestamp)*255./MHI_DURATION);
 
@@ -184,22 +199,24 @@ void mhi_coefficient(const Mat& img, Mat& mhi_out, int diff_threshold,
         if(DRAW) circle(mhi_out_2, mc, 2, (0, 255, 255), 3);
 
         // calculate mass speed
-        if (mcqueue.size() > 0){
-            double distance;
-            prev_mc = mcqueue[mcqueue.size()-1];
-            distance = sqrt(pow(mc.x - prev_mc.x, 2) + pow(mc.y - prev_mc.y, 2));
-            if (distance >=15){
-                for(int i = 0 ; i < mcqueue.size(); i++){
-                    mcqueue[i] = mc;
-                }
-            }
-        }
-        mcqueue.push_back(mc);
-        if (mcqueue.size() == 15){
-            mcqueue.pop_front();
-            prev_mc = mcqueue[0];
-            mass_speed = sqrt(pow(mc.x - prev_mc.x, 2) + pow(mc.y - prev_mc.y, 2));
-        }
+//        if (mcqueue.size() > 0){
+//            double distance;
+//            prev_mc = mcqueue[mcqueue.size()-1];
+//            distance = sqrt(pow(mc.x - prev_mc.x, 2) + pow(mc.y - prev_mc.y, 2));
+//            if (distance >= 22){
+//                for(int i = 0 ; i < mcqueue.size(); i++){
+//                    mcqueue[i] = mc;
+//                }
+//            }
+//        }
+//        mcqueue.push_back(mc);
+//        if (mcqueue.size() == 15){
+//
+//            mcqueue.pop_front();
+//            prev_mc = mcqueue[0];
+//            mass_speed = sqrt(pow(mc.x - prev_mc.x, 2) + pow(mc.y - prev_mc.y, 2));
+//            cout << mc.x << "," << mc.y <<"  / "<< prev_mc.x << "," << prev_mc.y << endl;
+//        }
 
 
         // calculate center of mass of foreground
@@ -226,13 +243,15 @@ void mhi_coefficient(const Mat& img, Mat& mhi_out, int diff_threshold,
 
         //calculate angle
         if (dx != 0 ){
-            angle = atan(fabs(dx)/fabs(dy));
+            //cout << "dx: " << dx << "," << dy << endl;
+            angle = atan(fabs(dy)/fabs(dx));
             if (dx > 0 && dy > 0) angle = angle;
             if (dx > 0 && dy < 0) angle = 2*M_PI - angle;
             if (dx < 0 && dy < 0) angle = angle + M_PI;
             if (dx < 0 && dy > 0) angle = M_PI - angle;
+            //cout << "  " <<angle << "  angle  " << atan(1.0) << endl;
             angle *= 180/M_PI;
-            //cout << "  " <<angle << "  angle  ";
+            //cout << "  " <<angle << "  angle  " << endl;
         }
 
     }
@@ -252,13 +271,16 @@ void mhi_coefficient(const Mat& img, Mat& mhi_out, int diff_threshold,
 
 }
 
-void shape_feature(Mat frame, Mat motion, float& elip_angle, float& elip_ratio){
+void shape_feature(Mat frame, Mat motion,double& mass_speed,float& mass_extreame_distance, float& elip_angle, float& elip_ratio){
     RotatedRect min_rect;
     int largest_contour_index = 0;
     Mat elip_motion;
     RotatedRect min_elip;
     vector<vector<Point> > contours;
     vector<Vec4i> hierarchy;
+    int centroid_x , cur_centroid_x , centroid_y , cur_centroid_y;
+    Point2i prev_mc;
+
     threshold( motion, elip_motion, 240, 255, CV_THRESH_BINARY );
     //imshow("elip_motionnnn",elip_motion);
     findContours( elip_motion, contours, hierarchy, 1, 2);
@@ -280,13 +302,60 @@ void shape_feature(Mat frame, Mat motion, float& elip_angle, float& elip_ratio){
         catch (exception& e){
             cout << "Standard exception: " << e.what() << endl;
         }
+        Moments mu;
+        mu = moments(contours[largest_contour_index],false);
+        Point mc;
+        centroid_x = int(mu.m10/mu.m00);
+        centroid_y = int(mu.m01/mu.m00);
+        mc = Point2i(centroid_x , centroid_y);
+
+        // calculate mass speed
+        if (mcqueue.size() > 0){
+            double distance;
+            prev_mc = mcqueue[mcqueue.size()-1];
+            distance = sqrt(pow(mc.x - prev_mc.x, 2) + pow(mc.y - prev_mc.y, 2));
+            if (distance >= 22){
+                for(int i = 0 ; i < mcqueue.size(); i++){
+                    mcqueue[i] = mc;
+                }
+            }
+        }
+        mcqueue.push_back(mc);
+        if (mcqueue.size() == 15){
+
+            mcqueue.pop_front();
+            prev_mc = mcqueue[0];
+            mass_speed = sqrt(pow(mc.x - prev_mc.x, 2) + pow(mc.y - prev_mc.y, 2));
+//            cout << mc.x << "," << mc.y <<"  / "<< prev_mc.x << "," << prev_mc.y << endl;
+        }
+
+        int w, h ;
+        Point2f HP, HP2;
+        w = min_rect.size.width;
+        h = min_rect.size.height;
+        Point2f box[4];
+        min_rect.points(box);
+        if (w < h){
+            HP = ((box[1] + box[2]) / 2);
+            HP2 = ((box[0] + box[3]) / 2);
+        }
+
+        else{
+            HP = ((box[0] + box[1]) / 2);
+            HP2 = ((box[2] + box[3]) / 2);
+        }
+
+        mass_extreame_distance = max(fabs(mc.y - HP.y), fabs(mc.y - HP2.y));
     }
+
+
     try{
         elip_angle = min_rect.angle;
         elip_ratio = min_elip.size.width / min_elip.size.height;
         if(elip_ratio < 1){
             elip_angle = -(elip_angle-90);
         }
+
 
         if(DRAW){
             Scalar color( 255,255,0);
@@ -302,7 +371,7 @@ void shape_feature(Mat frame, Mat motion, float& elip_angle, float& elip_ratio){
 }
 
 int predict(double magnitude, double mass_speed, double angle, double motion_ratio,
-            float elip_angle, float elip_ratio, int foreground_area,int frame_index){
+            float elip_angle, float elip_ratio, int foreground_area,int frame_index, float mass_extreame_distance){
     int result = 0;
     if (frame_index == 0 ){
         large_motion_frame = -1;
@@ -312,23 +381,27 @@ int predict(double magnitude, double mass_speed, double angle, double motion_rat
 
     //if it can be fall, observe in 50 following frame if it dont have any movement then give a conclusion
     if (apparently_fall_frame > 0){
-        if ((frame_index - apparently_fall_frame ) > 50){
-            large_motion_frame = -1;
-            apparently_fall_frame = -1;
-            move_down_frame = -1;
-            if (foreground_area < 0.5*40*40){
-                return 2;
-            }
-            else{
+        if ((frame_index - apparently_fall_frame ) > 55){
+            if ((frame_index - apparently_fall_frame ) > 80 || foreground_area > 0.5 * 40 * 40){
+                large_motion_frame = -1;
+                apparently_fall_frame = -1;
+                move_down_frame = -1;
                 return 0;
+            }
+
+            if (foreground_area < 0.5 * 40*40){
+                large_motion_frame = -1;
+                apparently_fall_frame = -1;
+                move_down_frame = -1;
+                return 2;
             }
         }
         result = 1;
     }
 
     if ((MIN_CONT_AREA < foreground_area && foreground_area < MAX_CONT_AREA) &&
-        (90 > motion_ratio && motion_ratio>= CONST_MRATE_1 &&
-        (60 > magnitude && magnitude >= CONST_MAGN_1) && 80 >= mass_speed && mass_speed >= CONST_MC_SPEED_1) &&
+        (100 > motion_ratio && motion_ratio>= CONST_MRATE_2 && (60 > magnitude && magnitude >= CONST_MAGN_2)
+        && 80 >= mass_speed && mass_speed >= CONST_MC_SPEED_2) &&
         (0 <= angle && angle <= 180)){
             /*
         if(80 > motion_ratio && motion_ratio>= CONST_MRATE_1) cout << "motion_ratio" << endl;
@@ -342,7 +415,7 @@ int predict(double magnitude, double mass_speed, double angle, double motion_rat
     if (large_motion_frame > 0){
         if (frame_index - large_motion_frame <= 30){
             if ((MIN_CONT_AREA < foreground_area && foreground_area < MAX_CONT_AREA)
-                && (20 <= angle && angle <= 180)){
+                && (40 <= angle && angle <= 140)){
                 move_down_frame = frame_index;
                cout <<"index= "<< frame_index << "downnnnnnnnnnnnnnnnnnn" <<endl ;
             }
@@ -354,8 +427,8 @@ int predict(double magnitude, double mass_speed, double angle, double motion_rat
     }
     if (move_down_frame > 0){
         if (frame_index - move_down_frame <= 20){
-            if ( 1 > elip_ratio && elip_ratio > CONST_AR && (
-                elip_angle > 0 && fabs(elip_angle - 90) >= CONST_ANGLE)){
+            if ( 1 > elip_ratio && elip_ratio > CONST_AR && mass_extreame_distance < MASS_EXTREAM_CONT && (
+                elip_angle > 0 && fabs(elip_angle - 90) >= CONST_ANGLE )){
                     cout <<"index= "<< frame_index << "falllllllllllllll" <<endl ;
                 apparently_fall_frame = frame_index;
             }
@@ -374,15 +447,15 @@ void run_get_feature(VideoCapture cap, Mat& frame, int& frame_index,
                      vector<vector<Point> > contours, vector<Vec4i> hierarchy,
                       Mat& motion, int& contour_area,
                  double& magnitude, double& mass_speed, double& angle, double& motion_ratio,
-                 RotatedRect& min_elip, float& elip_angle, float& elip_ratio){
+                 RotatedRect& min_elip, float& elip_angle, float& elip_ratio , float& mass_extreame_distance){
 
     RotatedRect min_rect;
 
 
     // read frame
-    m.lock();
-    read_next_frame(cap,frame, frame_index);
-    m.unlock();
+//    m.lock();
+//    read_next_frame(cap,frame, frame_index);
+//    m.unlock();
 
     // foreground subtract
     MOG2(pMOG2,frame,frame_index,foreground);
@@ -403,21 +476,23 @@ void run_get_feature(VideoCapture cap, Mat& frame, int& frame_index,
     mhi_coefficient(max_contour, motion, 30 , magnitude, mass_speed, angle, motion_ratio, min_rect);
 
     // calculate coefficient depend on elip shape
-    shape_feature(frame, motion, elip_angle, elip_ratio);
+    shape_feature(frame, motion,mass_speed,mass_extreame_distance, elip_angle, elip_ratio);
 
 
     m.lock();
         imshow( "Motion", motion );
         imshow("foreground", foreground);
-        imshow("asdffasdafsd", frame);
+        imshow("Lecture", frame);
         cout << fixed;
         cout << setprecision(2);
         cout << frame_index << "contour " << contour_area <<" mag " << magnitude << " massS "<< mass_speed
         << " angle " << angle << " motionR "<< motion_ratio
-        <<" Eangle "<< elip_angle <<" Eratio "<< elip_ratio ;
+        <<" Eangle "<< elip_angle <<" Eratio "<< elip_ratio << " mae "<<mass_extreame_distance << endl;
         int a = -1;
-        a = predict(magnitude,mass_speed,angle,motion_ratio,elip_angle,elip_ratio,contour_area,frame_index);
+        a = predict(magnitude,mass_speed,angle,motion_ratio,elip_angle,elip_ratio,contour_area,frame_index, mass_extreame_distance);
         cout << a << endl;
+        if(a == 2) falllll++;
+        cout << falllll << endl;
     m.unlock();
 
 
@@ -439,6 +514,7 @@ struct FrameData{
     double motion_ratio;
     float elip_angle;
     float elip_ratio;
+    float mass_extreame_distance;
 };
 
 
@@ -548,15 +624,24 @@ struct MHIThread : public  FrameDataPQueue, public LockedThread, public HasDispl
             update_mhi(elem.max_contour,elem.motion,30);
             mhi_coefficient(elem.max_contour, elem.motion, 30 , elem.magnitude,
                              elem.mass_speed, elem.angle, elem.motion_ratio, elem.min_rect);
-            shape_feature(elem.frame, elem.motion, elem.elip_angle, elem.elip_ratio);
+            shape_feature(elem.frame, elem.motion, elem.mass_speed,elem.mass_extreame_distance, elem.elip_angle, elem.elip_ratio);
             int a = predict(elem.magnitude, elem.mass_speed, elem.angle, elem.motion_ratio,
-                    elem.elip_angle, elem.elip_ratio, elem.contour_area, elem.index);
+                    elem.elip_angle, elem.elip_ratio, elem.contour_area, elem.index, elem.mass_extreame_distance);
             char message[100];
             sprintf(message, "%d", a);
 //            if (a == 2) exit(1);
 
             //sleep(0.5);
             display("Motion", elem.motion, elem.index);
+
+            std::cout << std::fixed;
+            std::cout << std::setprecision(1);
+            cout << elem.index << " " << "contour " << elem.contour_area <<" mag " << elem.magnitude << " massS "<< elem.mass_speed
+                << " angle " << elem.angle << " motionR "<< elem.motion_ratio
+                <<" Eangle "<< elem.elip_angle <<" Eratio "<< elem.elip_ratio << " mas_ex " << elem.mass_extreame_distance << endl;
+
+            if (a == 2) falllll++;
+            cout << falllll << endl;
 
             Mat frame = elem.frame.clone();
             cv::putText(frame, message, Point(100,100), cv::FONT_HERSHEY_SIMPLEX, 2, Scalar(255,255,255), 2);
@@ -629,19 +714,19 @@ struct ContourThread : public FrameDataQueue, public LockedThread, public HasDis
     }
 };
 
-int main()
+int temp_main()
 {
     Mat frame;
     int index = 0;
     int n = 1;
-    string filename = "Office/video (" + to_string(n) + ").avi" ;
+    string filename = "Lecture_room/video (" + to_string(n) + ").avi" ;
     VideoCapture cap(filename);
     if ( !cap.isOpened() ){
          cout << "Cannot open the video file" << endl;
          return -1;
     }
 
-    int n_contour = 3;
+    int n_contour = 1;
     ContourThread contourQueue[n_contour];
     DisplayThread displayQueue;
     MHIThread mhiQueue;
@@ -659,20 +744,26 @@ int main()
 
     bool shouldRead = true;
     while (true) {
+        int check;
         this_thread::sleep_for(chrono::milliseconds(20));
-        if (shouldRead) read_next_frame(cap, frame, index);
-
+        if (shouldRead) check = read_next_frame(cap, frame, index);
+        cout << n <<endl ;
         //cap >> frame;
-        if (frame.empty()) {
+        //cout << "sdfafsdafsdasfsfd";
+        if (frame.empty() || check == 0) {
+            //return 0;
+            //cout << "sdfafsdafsdasfsfd";
+            //index = 0;
             cout << "Empty frame" << endl;
             cap.release();
             mhi_timestamp = 0;
             n++;
-            filename = "Office/video (" + to_string(n) + ").avi" ;
+            filename = "Lecture_room/video (" + to_string(n) + ").avi" ;
             cap.open(filename);
+            //index = 0;
             continue;
         }
-
+        cout << index << endl;
         int threadID = index % n_contour;
         contourQueue[threadID].lock.lock();
 
@@ -684,26 +775,27 @@ int main()
         }
 
         contourQueue[threadID].lock.unlock();
-        cout << index << endl;
+//        cout << index << endl;
     }
 
     for (auto& t : allThreads) t.join();
 }
 
-int temp_main(int argc, char* argv[])
+int main(int argc, char* argv[])
 {
 
     int frame_index = 0, contour_area;
     double angle, magnitude, motion_ratio, mass_speed;
-    float elip_angle, elip_ratio;
+    float elip_angle, elip_ratio,mass_extreame_distance;
     Mat frame, foreground;
     vector<vector<Point> > contours;
     vector<Vec4i> hierarchy;
     RotatedRect min_elip;
     Mat motion;
-
+    int n = 13;
     // open the video file for reading
-    VideoCapture cap("Office/video (7).avi");
+    string filename = "Lecture_Room/video (" + to_string(n) + ").avi" ;
+    VideoCapture cap(filename);
     if ( !cap.isOpened() ){
          cout << "Cannot open the video file" << endl;
          return -1;
@@ -717,25 +809,45 @@ int temp_main(int argc, char* argv[])
 
         double t = (double) getTickCount();
 
-        thread t1(run_get_feature,cap, ref(frame), ref(frame_index), pMOG2, ref(foreground),
-                        contours, hierarchy, ref(motion), ref(contour_area),
-                        ref(magnitude), ref(mass_speed), ref(angle),
-                  ref(motion_ratio), ref(min_elip), ref(elip_angle), ref(elip_ratio));
+//        thread t1(run_get_feature,cap, ref(frame), ref(frame_index), pMOG2, ref(foreground),
+//                        contours, hierarchy, ref(motion), ref(contour_area),
+//                        ref(magnitude), ref(mass_speed), ref(angle),
+//                  ref(motion_ratio), ref(min_elip), ref(elip_angle), ref(elip_ratio) , ref(mass_extreame_distance));
+//
+//
+//        if (t1.joinable()) t1.join();
+        int check = read_next_frame(cap,frame, frame_index);
+        if (frame.empty() || check == 0 ) {
+            //return 0;
+            //cout << "sdfafsdafsdasfsfd";
+            //index = 0;
+            cout << "Empty frame" << endl;
+            cap.release();
+            mhi_timestamp = 0;
+            n++;
+            filename = "Office/video (" + to_string(n) + ").avi" ;
+            cap.open(filename);
+            pMOG2 = createBackgroundSubtractorMOG2(300,40,true);
+            //index = 0;
+            continue;
+        }
 
-        if (t1.joinable()) t1.join();
+
+        run_get_feature(cap,frame,frame_index,pMOG2,foreground,contours,hierarchy,motion,contour_area,magnitude,mass_speed
+                        ,angle,motion_ratio,min_elip,elip_angle,elip_ratio,mass_extreame_distance);
 
 
-
+        cout<< n << endl;
         t = ((double)getTickCount() - t)/getTickFrequency();
         t = (1/t) * 4;
         cout << " " << endl;
-
-        if(waitKey(30) == 27){
+        char key = waitKey(5);
+        if(key == 'p')
+            waitKey() && 0xff;
+        if(waitKey(1) == 27){
             cout << "esc key is pressed by user" << endl;
             break;
        }
     }
     return 0;
 }
-
-
