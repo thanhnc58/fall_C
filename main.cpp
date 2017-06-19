@@ -42,6 +42,7 @@ bool DRAW = true;
 mutex m;
 int mhi_timestamp = 0;
 int falllll = 0;
+int new_vid = 0;
 
 
 int read_next_frame(VideoCapture cap, Mat& frame, int& index){
@@ -54,10 +55,11 @@ int read_next_frame(VideoCapture cap, Mat& frame, int& index){
         return 0;
     }
     index++;
-    return 1;
+
 
     //resize frame
-    //resize(frame, frame, Size(320,240), 0, 0, INTER_LINEAR);
+    resize(frame, frame, Size(320,240), 0, 0, INTER_LINEAR);
+    return 1;
 }
 
 void MOG2(Ptr<BackgroundSubtractor> pMOG2, Mat frame, int index, Mat& foreground){
@@ -113,7 +115,7 @@ void Draw_max_contour(Mat foreground, vector<vector<Point> > contours,
     }
 }
 
-void  update_mhi( const Mat& img, Mat& mhi_out, int diff_threshold){
+void update_mhi( const Mat& img, Mat& mhi_out, int diff_threshold){
     mhi_timestamp = mhi_timestamp + 1;
     double timestamp = mhi_timestamp; // get current time in seconds
     //cout <<"timestaep: "<< timestamp << endl;
@@ -381,13 +383,13 @@ int predict(double magnitude, double mass_speed, double angle, double motion_rat
 
     //if it can be fall, observe in 50 following frame if it dont have any movement then give a conclusion
     if (apparently_fall_frame > 0){
-        if ((frame_index - apparently_fall_frame ) > 55){
-            if ((frame_index - apparently_fall_frame ) > 80 || foreground_area > 0.5 * 40 * 40){
-                large_motion_frame = -1;
-                apparently_fall_frame = -1;
-                move_down_frame = -1;
-                return 0;
-            }
+        if ((frame_index - apparently_fall_frame ) > 100){
+//            if ((frame_index - apparently_fall_frame ) > 80 || foreground_area > 0.5 * 40 * 40){
+//                large_motion_frame = -1;
+//                apparently_fall_frame = -1;
+//                move_down_frame = -1;
+//                return 0;
+//            }
 
             if (foreground_area < 0.5 * 40*40){
                 large_motion_frame = -1;
@@ -515,6 +517,7 @@ struct FrameData{
     float elip_angle;
     float elip_ratio;
     float mass_extreame_distance;
+
 };
 
 
@@ -543,6 +546,7 @@ struct DisplayThread {
                 auto& q = p.second;
 //                cout << "checkDisplay win = " << winName << " index = " << curIndex[winName]
 //                     << " top = " << q.top().second << endl;
+                if (!q.empty() && q.top().second == 1) curIndex[winName] = 1;
                 if (q.empty() || q.top().second != curIndex[winName]) continue;
 //                cout << "display " << winName << " size = " << q.size() << endl;
 
@@ -610,12 +614,14 @@ struct MHIThread : public  FrameDataPQueue, public LockedThread, public HasDispl
         return thread([=]{ doComputeMHI(); });
     }
     void doComputeMHI() {
+
         while (true) {
             this_thread::sleep_for(chrono::milliseconds(1));
+            if(!this->empty() && this->top().index == 1) curIndex = 1;
             if (this->empty()  || this->top().index != curIndex) continue;
             lock.lock();
-
 //            cout << "mhi size = " << size() << endl;
+            cout << "cur index  " << curIndex <<endl;
             FrameData elem = this->top();
             curIndex++;
             this->pop();
@@ -640,11 +646,23 @@ struct MHIThread : public  FrameDataPQueue, public LockedThread, public HasDispl
                 << " angle " << elem.angle << " motionR "<< elem.motion_ratio
                 <<" Eangle "<< elem.elip_angle <<" Eratio "<< elem.elip_ratio << " mas_ex " << elem.mass_extreame_distance << endl;
 
-            if (a == 2) falllll++;
-            cout << falllll << endl;
+
 
             Mat frame = elem.frame.clone();
-            cv::putText(frame, message, Point(100,100), cv::FONT_HERSHEY_SIMPLEX, 2, Scalar(255,255,255), 2);
+            if(a == 0 ){
+                cv::putText(frame, " ", Point(100,100), cv::FONT_HERSHEY_SIMPLEX, 2, Scalar(255,255,255), 2);
+            }
+            if (a==1){
+                    cv::putText(frame, "OPPSSS", Point(100,100), cv::FONT_HERSHEY_SIMPLEX, 2, Scalar(255,255,255), 2);
+            }
+            if (a == 2) {
+
+                falllll++;
+                cv::putText(frame, "Falllllll", Point(100,100), cv::FONT_HERSHEY_SIMPLEX, 2, Scalar(255,0,0), 2);
+                //system("canberra-gtk-play -f gg.wav");
+            }
+            cout << falllll << endl;
+
             ellipse(frame,elem.min_elip,Scalar(255,255,0),1,8);
             display("Result", frame, elem.index);
         }
@@ -674,7 +692,10 @@ struct ContourThread : public FrameDataQueue, public LockedThread, public HasDis
             FrameData data = this->front();
             this->pop();
             lock.unlock();
-
+            if (data.index < 5) {
+                pMOG2 = createBackgroundSubtractorMOG2(300,40,true);
+                cout << "asdfjhaksjdfhkasdjfhkjasfdhjkahsdkjfhajksdhfksakd"<< endl;
+            }
             getContour(data);
             displayData(data);
             if (mMHIThread) mMHIThread->pushFrameData(data);
@@ -714,12 +735,12 @@ struct ContourThread : public FrameDataQueue, public LockedThread, public HasDis
     }
 };
 
-int temp_main()
+int main()
 {
     Mat frame;
     int index = 0;
     int n = 1;
-    string filename = "Lecture_room/video (" + to_string(n) + ").avi" ;
+    string filename = "data/vid" + to_string(n) + ".mp4" ;
     VideoCapture cap(filename);
     if ( !cap.isOpened() ){
          cout << "Cannot open the video file" << endl;
@@ -745,22 +766,20 @@ int temp_main()
     bool shouldRead = true;
     while (true) {
         int check;
-        this_thread::sleep_for(chrono::milliseconds(20));
+        this_thread::sleep_for(chrono::milliseconds(50));
         if (shouldRead) check = read_next_frame(cap, frame, index);
         cout << n <<endl ;
-        //cap >> frame;
-        //cout << "sdfafsdafsdasfsfd";
+
         if (frame.empty() || check == 0) {
-            //return 0;
-            //cout << "sdfafsdafsdasfsfd";
-            //index = 0;
+
             cout << "Empty frame" << endl;
             cap.release();
             mhi_timestamp = 0;
             n++;
-            filename = "Lecture_room/video (" + to_string(n) + ").avi" ;
+            filename = "data/vid" + to_string(n) + ".mp4" ;
             cap.open(filename);
-            //index = 0;
+            new_vid = 1;
+            index = 0;
             continue;
         }
         cout << index << endl;
@@ -781,7 +800,7 @@ int temp_main()
     for (auto& t : allThreads) t.join();
 }
 
-int main(int argc, char* argv[])
+int temp_main(int argc, char* argv[])
 {
 
     int frame_index = 0, contour_area;
@@ -793,8 +812,9 @@ int main(int argc, char* argv[])
     RotatedRect min_elip;
     Mat motion;
     int n = 13;
-    // open the video file for reading
-    string filename = "Lecture_Room/video (" + to_string(n) + ").avi" ;
+    //  open the video file for reading
+    string filename = "vid1.mp4";
+//  string filename = "Lecture_Room/video (" + to_string(n) + ").avi" ;
     VideoCapture cap(filename);
     if ( !cap.isOpened() ){
          cout << "Cannot open the video file" << endl;
@@ -825,7 +845,7 @@ int main(int argc, char* argv[])
             cap.release();
             mhi_timestamp = 0;
             n++;
-            filename = "Office/video (" + to_string(n) + ").avi" ;
+            filename = "rtsp://192.168.1.8/user=admin_password=123456_channel=1_stream=1.sdp";
             cap.open(filename);
             pMOG2 = createBackgroundSubtractorMOG2(300,40,true);
             //index = 0;
