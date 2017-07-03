@@ -12,28 +12,34 @@
 #include <math.h>
 #include <thread>
 #include <mutex>
+#include <istream>
+#include <map>
+#include <string>
+#include <fstream>
 
 using namespace cv;
 using namespace std;
 
-const double MHI_DURATION = 40;
-const double MAX_TIME_DELTA = 0.5;
-const double MIN_TIME_DELTA = 0.05;
-const double MHI_THRESHOLD = 100;
-const double CONST_MC_SPEED_1 = 22;
-const double CONST_MRATE_1 = 40;
-const double CONST_MAGN_1 = 13;
-const double MASS_EXTREAM_CONT = 50;
+double MHI_DURATION;
+double MAX_TIME_DELTA ;
+double MIN_TIME_DELTA ;
+double MHI_THRESHOLD;
+double CONST_MC_SPEED_1;
+double CONST_MRATE_1;
+double CONST_MAGN_1;
+double MASS_EXTREAM_CONT;
 
-const double CONST_MC_SPEED_2 = 20;
-const double CONST_MRATE_2 = 40;
-const double CONST_MAGN_2 = 10;
+double CONST_MC_SPEED_2;
+double CONST_MRATE_2;
+double CONST_MAGN_2;
 
-const double CONST_AR = 0.4;
-const double CONST_ANGLE = 0;
+double CONST_AR;
+double CONST_ANGLE;
 
-const double MIN_CONT_AREA = 40* 40;
-const double MAX_CONT_AREA = 150 * 150;
+double MIN_CONT_AREA;
+double MAX_CONT_AREA;
+
+int THREADS_NUMBER;
 
 deque<Point2i> mcqueue;
 Mat mhi; // MHI
@@ -735,19 +741,85 @@ struct ContourThread : public FrameDataQueue, public LockedThread, public HasDis
     }
 };
 
+void read_file (istream& ins, map<string,double>& d){
+    string s, key , value;
+    while ( getline(ins,s)){
+
+        string::size_type begin = s.find_first_not_of( " \f\t\v" );
+
+        // Skip blank lines
+        if (begin == string::npos) continue;
+
+        // Skip commentary
+        if (string( "#;" ).find( s[ begin ] ) != string::npos) continue;
+
+        string::size_type end = s.find( '=' , begin);
+        key = s.substr( begin, end - begin );
+
+        // (No leading or trailing whitespace allowed)
+        key.erase( key.find_last_not_of( " \f\t\v" ) + 1 );
+
+        // No blank keys allowed
+        if (key.empty()) continue;
+
+        //cout << key;
+
+         // Extract the value (no leading or trailing whitespace allowed)
+        begin = s.find_first_not_of( " \f\n\r\t\v", end + 1 );
+        end   = s.find_last_not_of(  " \f\n\r\t\v" ) + 1;
+
+        value = s.substr( begin, end - begin );
+
+         // Insert the properly extracted (key, value) pair into the map
+        d[ key ] = atof(value.c_str());
+        //cout << " "<< d[key] << endl;
+    }
+}
+
+
 int main()
 {
+    map <string,double> data_config;
+    //data myconfig;
+    ifstream f;
+    f.open("config.ini" );
+    read_file(f,data_config);
+    MAX_TIME_DELTA = data_config["MAX_TIME_DELTA"];
+    MHI_DURATION = data_config["MHI_DURATION"];
+    MIN_TIME_DELTA = data_config["MIN_TIME_DELTA"];
+    MHI_THRESHOLD = data_config["MHI_THRESHOLD"];
+    CONST_MC_SPEED_1 = data_config["CONST_MC_SPEED_1"];
+    CONST_MRATE_1 = data_config["CONST_MRATE_1"];
+    CONST_MAGN_1 = data_config["CONST_MAGN_1"];
+    MASS_EXTREAM_CONT = data_config["MASS_EXTREAM_CONT"];
+
+    CONST_MC_SPEED_2 = data_config["CONST_MC_SPEED_2"];
+    CONST_MRATE_2 = data_config["CONST_MRATE_2"];
+    CONST_MAGN_2 = data_config["CONST_MAGN_2"];
+
+    CONST_AR = data_config["CONST_AR"];
+    CONST_ANGLE = data_config["CONST_ANGLE"];
+
+    MIN_CONT_AREA = data_config["MIN_CONT_AREA"];
+    MAX_CONT_AREA = data_config["MAX_CONT_AREA"];
+
+    THREADS_NUMBER = data_config["THREADS_NUMBER"];
+
+    //cout << THREADS_NUMBER;
+
+    f.close();
+
     Mat frame;
     int index = 0;
     int n = 1;
-    string filename = "data/vid" + to_string(n) + ".mp4" ;
+    string filename = "Home_01/Videos/video (" + to_string(n) + ").avi" ;
     VideoCapture cap(filename);
     if ( !cap.isOpened() ){
          cout << "Cannot open the video file" << endl;
          return -1;
     }
 
-    int n_contour = 1;
+    int n_contour = THREADS_NUMBER;
     ContourThread contourQueue[n_contour];
     DisplayThread displayQueue;
     MHIThread mhiQueue;
