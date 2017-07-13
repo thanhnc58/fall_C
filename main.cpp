@@ -396,13 +396,14 @@ int predict(double magnitude, double mass_speed, double angle, double motion_rat
 //                move_down_frame = -1;
 //                return 0;
 //            }
+            large_motion_frame = -1;
+            apparently_fall_frame = -1;
+            move_down_frame = -1;
 
             if (foreground_area < 0.5 * 40*40){
-                large_motion_frame = -1;
-                apparently_fall_frame = -1;
-                move_down_frame = -1;
                 return 2;
             }
+            else return 0;
         }
         result = 1;
     }
