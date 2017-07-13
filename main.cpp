@@ -20,31 +20,31 @@
 using namespace cv;
 using namespace std;
 
-double MHI_DURATION;
-double MAX_TIME_DELTA ;
-double MIN_TIME_DELTA ;
-double MHI_THRESHOLD;
-double CONST_MC_SPEED_1;
-double CONST_MRATE_1;
-double CONST_MAGN_1;
-double MASS_EXTREAM_CONT;
+double MHI_DURATION = 40;
+double MAX_TIME_DELTA = 0.5;
+double MIN_TIME_DELTA = 0.05;
+double MHI_THRESHOLD = 100;
+double CONST_MC_SPEED_1 = 22;
+double CONST_MRATE_1 =  40;
+double CONST_MAGN_1 = 13;
+double MASS_EXTREAM_CONT = 50;
 
-double CONST_MC_SPEED_2;
-double CONST_MRATE_2;
-double CONST_MAGN_2;
+double CONST_MC_SPEED_2 = 20;
+double CONST_MRATE_2 = 40;
+double CONST_MAGN_2 = 10;
 
-double CONST_AR;
-double CONST_ANGLE;
+double CONST_AR = 0.4;
+double CONST_ANGLE = 0;
 
-double MIN_CONT_AREA;
-double MAX_CONT_AREA;
+double MIN_CONT_AREA = 1600;
+double MAX_CONT_AREA = 22500;
 
-int THREADS_NUMBER;
+int THREADS_NUMBER = 3;
 
 deque<Point2i> mcqueue;
 Mat mhi; // MHI
 int prev_area , large_motion_frame , move_down_frame , apparently_fall_frame;
-bool DRAW = true;
+bool DRAW = false;
 mutex m;
 int mhi_timestamp = 0;
 int falllll = 0;
@@ -644,7 +644,7 @@ struct MHIThread : public  FrameDataPQueue, public LockedThread, public HasDispl
 //            if (a == 2) exit(1);
 
             //sleep(0.5);
-            display("Motion", elem.motion, elem.index);
+            //display("Motion", elem.motion, elem.index);
 
             std::cout << std::fixed;
             std::cout << std::setprecision(1);
@@ -723,8 +723,8 @@ struct ContourThread : public FrameDataQueue, public LockedThread, public HasDis
 
     void displayData(const FrameData& data) {
 //        cout << "displayData id = " << data.index << endl;
-        display("Original", data.frame, data.index);
-        display("Foreground", data.max_contour, data.index);
+//        display("Original", data.frame, data.index);
+//        display("Foreground", data.max_contour, data.index);
 //        display("Contour", data.max_contour, data.index);
     }
 
@@ -741,7 +741,7 @@ struct ContourThread : public FrameDataQueue, public LockedThread, public HasDis
     }
 };
 
-void read_file (istream& ins, map<string,double>& d){
+void read_file (istream& ins, map<string,string>& d){
     string s, key , value;
     while ( getline(ins,s)){
 
@@ -771,7 +771,7 @@ void read_file (istream& ins, map<string,double>& d){
         value = s.substr( begin, end - begin );
 
          // Insert the properly extracted (key, value) pair into the map
-        d[ key ] = atof(value.c_str());
+        d[ key ] = value;
         //cout << " "<< d[key] << endl;
     }
 }
@@ -779,31 +779,32 @@ void read_file (istream& ins, map<string,double>& d){
 
 int main()
 {
-    map <string,double> data_config;
+    map <string,string> data_config;
     //data myconfig;
     ifstream f;
     f.open("config.ini" );
     read_file(f,data_config);
-    MAX_TIME_DELTA = data_config["MAX_TIME_DELTA"];
-    MHI_DURATION = data_config["MHI_DURATION"];
-    MIN_TIME_DELTA = data_config["MIN_TIME_DELTA"];
-    MHI_THRESHOLD = data_config["MHI_THRESHOLD"];
-    CONST_MC_SPEED_1 = data_config["CONST_MC_SPEED_1"];
-    CONST_MRATE_1 = data_config["CONST_MRATE_1"];
-    CONST_MAGN_1 = data_config["CONST_MAGN_1"];
-    MASS_EXTREAM_CONT = data_config["MASS_EXTREAM_CONT"];
+    string IP_ADDRESS = data_config["IP_ADDRESS"];
+    MAX_TIME_DELTA = atof(data_config["MAX_TIME_DELTA"].c_str());
+    MHI_DURATION = atof(data_config["MHI_DURATION"].c_str());
+    MIN_TIME_DELTA = atof(data_config["MIN_TIME_DELTA"].c_str());
+    MHI_THRESHOLD = atof(data_config["MHI_THRESHOLD"].c_str());
+    CONST_MC_SPEED_1 = atof(data_config["CONST_MC_SPEED_1"].c_str());
+    CONST_MRATE_1 = atof(data_config["CONST_MRATE_1"].c_str());
+    CONST_MAGN_1 = atof(data_config["CONST_MAGN_1"].c_str());
+    MASS_EXTREAM_CONT = atof(data_config["MASS_EXTREAM_CONT"].c_str());
 
-    CONST_MC_SPEED_2 = data_config["CONST_MC_SPEED_2"];
-    CONST_MRATE_2 = data_config["CONST_MRATE_2"];
-    CONST_MAGN_2 = data_config["CONST_MAGN_2"];
+    CONST_MC_SPEED_2 = atof(data_config["CONST_MC_SPEED_2"].c_str());
+    CONST_MRATE_2 = atof(data_config["CONST_MRATE_2"].c_str());
+    CONST_MAGN_2 = atof(data_config["CONST_MAGN_2"].c_str());
 
-    CONST_AR = data_config["CONST_AR"];
-    CONST_ANGLE = data_config["CONST_ANGLE"];
+    CONST_AR = atof(data_config["CONST_AR"].c_str());
+    CONST_ANGLE = atof(data_config["CONST_ANGLE"].c_str());
 
-    MIN_CONT_AREA = data_config["MIN_CONT_AREA"];
-    MAX_CONT_AREA = data_config["MAX_CONT_AREA"];
+    MIN_CONT_AREA = atof(data_config["MIN_CONT_AREA"].c_str());
+    MAX_CONT_AREA = atof(data_config["MAX_CONT_AREA"].c_str());
 
-    THREADS_NUMBER = data_config["THREADS_NUMBER"];
+    THREADS_NUMBER = atof(data_config["THREADS_NUMBER"].c_str());
 
     //cout << THREADS_NUMBER;
 
@@ -812,7 +813,8 @@ int main()
     Mat frame;
     int index = 0;
     int n = 1;
-    string filename = "Home_01/Videos/video (" + to_string(n) + ").avi" ;
+    cout << IP_ADDRESS ;
+    string filename = IP_ADDRESS;
     VideoCapture cap(filename);
     if ( !cap.isOpened() ){
          cout << "Cannot open the video file" << endl;
@@ -848,7 +850,7 @@ int main()
             cap.release();
             mhi_timestamp = 0;
             n++;
-            filename = "data/vid" + to_string(n) + ".mp4" ;
+            filename = "Home_01/Videos/video (" + to_string(n) + ").avi" ;
             cap.open(filename);
             new_vid = 1;
             index = 0;
@@ -858,7 +860,7 @@ int main()
         int threadID = index % n_contour;
         contourQueue[threadID].lock.lock();
 
-        if ( contourQueue[threadID].size() < 100 ) {
+        if ( contourQueue[threadID].size() < 1000 ) {
             contourQueue[threadID].pushFrame(frame.clone(),index);
             shouldRead = true;
         } else  {
